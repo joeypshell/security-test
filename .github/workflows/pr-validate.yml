@@ -1,0 +1,128 @@
+name: PR Validate
+
+on:
+  pull_request:
+    paths:
+      - ".github/**"
+      - "docs/**"
+      - "identity/**"
+      - "infra/**"
+      - "scripts/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  bicep:
+    name: Bicep build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Bicep
+        run: az bicep install
+
+      - name: Build Bicep templates
+        shell: pwsh
+        run: |
+          $files = Get-ChildItem -Path infra -Recurse -Filter *.bicep
+          foreach ($file in $files) {
+              az bicep build --file $file.FullName
+          }
+
+      - name: Build Bicep parameter files
+        shell: pwsh
+        run: |
+          $files = Get-ChildItem -Path infra -Recurse -Filter *.bicepparam
+          foreach ($file in $files) {
+              az bicep build-params --file $file.FullName
+          }
+
+  powershell:
+    name: PowerShell analysis
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+          Install-Module PSScriptAnalyzer -Scope CurrentUser -Force
+
+      - name: Run PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          $results = Invoke-ScriptAnalyzer -Path scripts -Recurse -Severity Warning,Error
+          $results | Format-Table -AutoSize
+          if ($results) {
+              throw "PSScriptAnalyzer found issues."
+          }
+
+  policy:
+    name: Repository policy checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run custom policy gates
+        shell: pwsh
+        run: |
+          ./scripts/validation/Test-RepoPolicy.ps1
+          ./identity/conditional-access/tests/Test-ConditionalAccessPolicy.ps1
+
+  secret-scan:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  dependency-review:
+    name: Dependency review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Review dependencies
+        uses: actions/dependency-review-action@v4
+
+  sandbox-what-if:
+    name: Sandbox what-if
+    if: ${{ vars.AZURE_CLIENT_ID != '' && vars.AZURE_TENANT_ID != '' && vars.AZURE_SUBSCRIPTION_ID != '' }}
+    runs-on: ubuntu-latest
+    environment: sandbox
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: What-if keyvault-rbac sandbox
+        run: |
+          az deployment sub what-if \
+            --location centralus \
+            --template-file infra/stacks/keyvault-rbac/main.bicep \
+            --parameters infra/stacks/keyvault-rbac/params/sandbox.bicepparam

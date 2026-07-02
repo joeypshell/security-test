@@ -1,0 +1,86 @@
+name: Deploy Azure
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: GitHub Environment and parameter target.
+        required: true
+        type: choice
+        options:
+          - sandbox
+          - dev
+          - qa
+          - prod
+          - keys-prod
+      stack:
+        description: Bicep stack to deploy.
+        required: true
+        type: choice
+        options:
+          - keyvault-rbac
+          - sentinel
+      mode:
+        description: Run only what-if, or what-if then deploy.
+        required: true
+        default: what-if-only
+        type: choice
+        options:
+          - what-if-only
+          - deploy
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    name: ${{ inputs.stack }} to ${{ inputs.target }}
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.target }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve deployment files
+        id: files
+        shell: pwsh
+        run: |
+          $templateFile = "infra/stacks/${{ inputs.stack }}/main.bicep"
+          $parameterFile = "infra/stacks/${{ inputs.stack }}/params/${{ inputs.target }}.bicepparam"
+
+          if (!(Test-Path $templateFile)) {
+              throw "Template file was not found: $templateFile"
+          }
+
+          if (!(Test-Path $parameterFile)) {
+              throw "Parameter file was not found for this stack and target: $parameterFile"
+          }
+
+          "template-file=$templateFile" >> $env:GITHUB_OUTPUT
+          "parameter-file=$parameterFile" >> $env:GITHUB_OUTPUT
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Bicep build
+        run: az bicep build --file "${{ steps.files.outputs.template-file }}"
+
+      - name: What-if
+        run: |
+          az deployment sub what-if \
+            --location centralus \
+            --template-file "${{ steps.files.outputs.template-file }}" \
+            --parameters "${{ steps.files.outputs.parameter-file }}"
+
+      - name: Deploy
+        if: ${{ inputs.mode == 'deploy' }}
+        run: |
+          az deployment sub create \
+            --location centralus \
+            --template-file "${{ steps.files.outputs.template-file }}" \
+            --parameters "${{ steps.files.outputs.parameter-file }}"

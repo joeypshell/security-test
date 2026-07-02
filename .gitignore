@@ -1,0 +1,19 @@
+.DS_Store
+Thumbs.db
+
+# PowerShell
+*.ps1xml
+*.pssc
+*.psrc
+
+# Azure and local tool output
+.azure/
+.bicep/
+bin/
+obj/
+out/
+*.log
+
+# Editor state
+.vscode/
+.idea/
