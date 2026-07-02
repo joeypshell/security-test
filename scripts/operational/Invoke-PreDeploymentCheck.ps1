@@ -8,7 +8,7 @@ Confirms that expected template and parameter files exist before a workflow atte
 [CmdletBinding(SupportsShouldProcess)]
 param(
     [Parameter(Mandatory)]
-    [ValidateSet('keyvault-rbac', 'sentinel')]
+    [ValidateSet('keyvault', 'sentinel')]
     [string] $Stack,
 
     [Parameter(Mandatory)]

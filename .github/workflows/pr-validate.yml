@@ -101,11 +101,11 @@ jobs:
       - name: Review dependencies
         uses: actions/dependency-review-action@v4
 
-  sandbox-what-if:
-    name: Sandbox what-if
+  kv-dev-what-if:
+    name: kv-dev what-if
     if: ${{ vars.AZURE_CLIENT_ID != '' && vars.AZURE_TENANT_ID != '' && vars.AZURE_SUBSCRIPTION_ID != '' }}
     runs-on: ubuntu-latest
-    environment: sandbox
+    environment: kv-dev
     permissions:
       contents: read
       id-token: write
@@ -120,9 +120,9 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
-      - name: What-if keyvault-rbac sandbox
+      - name: What-if sample app Key Vault in kv-dev
         run: |
           az deployment sub what-if \
             --location centralus \
-            --template-file infra/stacks/keyvault-rbac/main.bicep \
-            --parameters infra/stacks/keyvault-rbac/params/sandbox.bicepparam
+            --template-file infra/stacks/keyvault/main.bicep \
+            --parameters infra/stacks/keyvault/params/app-lifecycle/sample-app.kv-dev.bicepparam

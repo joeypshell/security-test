@@ -10,7 +10,7 @@ param(
     [Parameter(Mandatory)]
     [string] $InputPath,
 
-    [string] $OutputPath = 'keyvault-rbac-migration-plan.json'
+    [string] $OutputPath = 'keyvault-migration-plan.json'
 )
 
 $ErrorActionPreference = 'Stop'

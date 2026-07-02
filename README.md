@@ -10,17 +10,21 @@ Branches represent code maturity:
 - `feature/*`
 - `hotfix/*`
 
-Environments represent deployment targets:
+Environments represent deployment targets and approval boundaries:
 
-- `sandbox`
-- `dev`
-- `qa`
-- `prod`
+- `kv-dev`
+- `kv-qa`
 - `keys-prod`
+- `keys-shared`
 - `entra-report-only`
 - `entra-prod`
 
 The same commit should move through environments with increasing approvals. Do not create long-lived `dev`, `qa`, `prod`, or `keys` branches.
+
+The `keys` Azure subscription is intentionally split into two GitHub deployment targets:
+
+- `keys-prod` for production app Key Vaults that promote through `kv-dev` and `kv-qa`
+- `keys-shared` for departmental, security, or keys-only vaults that do not have dev/qa/prod copies
 
 ## Repository layout
 
@@ -39,6 +43,7 @@ scripts/
   migration/          Migration helpers
   reporting/          Export and reporting helpers
 docs/
+  diagrams/           Mermaid diagrams for deployment flow and target mapping
   adr/                Architecture decisions
   runbooks/           Setup and operating runbooks
 ```
@@ -56,7 +61,7 @@ PRs run:
 
 ## Deployment
 
-Azure resource deployments use `.github/workflows/deploy-azure.yml`.
+Key Vault deployments use `.github/workflows/deploy-keyvault.yml`.
 
 Required GitHub Environment variables:
 
@@ -66,7 +71,14 @@ Required GitHub Environment variables:
 
 The workflow authenticates with Azure using OIDC, runs `what-if`, then deploys only when the operator selects `deploy`.
 
+Key Vault examples:
+
+- app lifecycle vault: `sample-app` to `kv-dev`, then `kv-qa`, then `keys-prod`
+- keys-only vault: `department-shared` to `keys-shared`
+
 Conditional Access changes use `.github/workflows/deploy-entra.yml`. Policies default to `reportOnly`; production enablement is separated behind the `entra-prod` environment and requires a change ticket.
+
+See `docs/diagrams/deployment-flows.md` for the full flow.
 
 ## Local validation
 

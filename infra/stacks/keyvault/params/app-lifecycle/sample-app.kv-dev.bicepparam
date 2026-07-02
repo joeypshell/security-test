@@ -1,10 +1,11 @@
-using '../main.bicep'
+using '../../main.bicep'
 
 param location = 'centralus'
-param workloadName = 'sectest'
-param environmentName = 'dev'
+param workloadName = 'sampleapp'
+param environmentName = 'kv-dev'
 param tags = {
   owner: 'security'
   dataClassification: 'internal'
+  deploymentClass: 'app-lifecycle'
 }
 param roleAssignments = []
