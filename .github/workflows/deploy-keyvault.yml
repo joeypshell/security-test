@@ -1,25 +1,29 @@
-name: Deploy Azure
+name: Deploy Key Vault
 
 on:
   workflow_dispatch:
     inputs:
       target:
-        description: GitHub Environment and parameter target.
+        description: GitHub Environment and Key Vault subscription/risk target.
         required: true
         type: choice
         options:
-          - sandbox
-          - dev
-          - qa
-          - prod
+          - kv-dev
+          - kv-qa
           - keys-prod
-      stack:
-        description: Bicep stack to deploy.
+          - keys-shared
+      deployment_class:
+        description: App lifecycle vaults promote dev to qa to keys-prod; keys-only vaults deploy only to keys-shared.
         required: true
         type: choice
         options:
-          - keyvault-rbac
-          - sentinel
+          - app-lifecycle
+          - keys-only
+      parameter_set:
+        description: Base parameter set name, such as sample-app or department-shared.
+        required: true
+        type: string
+        default: sample-app
       mode:
         description: Run only what-if, or what-if then deploy.
         required: true
@@ -35,7 +39,7 @@ permissions:
 
 jobs:
   deploy:
-    name: ${{ inputs.stack }} to ${{ inputs.target }}
+    name: keyvault ${{ inputs.parameter_set }} to ${{ inputs.target }}
     runs-on: ubuntu-latest
     environment: ${{ inputs.target }}
     steps:
@@ -46,8 +50,21 @@ jobs:
         id: files
         shell: pwsh
         run: |
-          $templateFile = "infra/stacks/${{ inputs.stack }}/main.bicep"
-          $parameterFile = "infra/stacks/${{ inputs.stack }}/params/${{ inputs.target }}.bicepparam"
+          $target = "${{ inputs.target }}"
+          $deploymentClass = "${{ inputs.deployment_class }}"
+          $parameterSet = "${{ inputs.parameter_set }}"
+
+          $appLifecycleTargets = @("kv-dev", "kv-qa", "keys-prod")
+          if ($deploymentClass -eq "app-lifecycle" -and $target -notin $appLifecycleTargets) {
+              throw "App lifecycle vaults can only deploy to: $($appLifecycleTargets -join ', ')."
+          }
+
+          if ($deploymentClass -eq "keys-only" -and $target -ne "keys-shared") {
+              throw "Keys-only vaults can only deploy to keys-shared."
+          }
+
+          $templateFile = "infra/stacks/keyvault/main.bicep"
+          $parameterFile = "infra/stacks/keyvault/params/$deploymentClass/$parameterSet.$target.bicepparam"
 
           if (!(Test-Path $templateFile)) {
               throw "Template file was not found: $templateFile"

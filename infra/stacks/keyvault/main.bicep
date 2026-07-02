@@ -6,7 +6,7 @@ param location string
 @description('Short workload name used in resource names.')
 param workloadName string
 
-@description('Deployment target name, such as sandbox or prod.')
+@description('Deployment target label, such as kv-dev, kv-qa, keys-prod, or keys-shared.')
 param environmentName string
 
 @description('Resource tags.')

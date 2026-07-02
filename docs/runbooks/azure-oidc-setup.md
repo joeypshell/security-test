@@ -5,11 +5,10 @@ Use GitHub OIDC instead of stored Azure client secrets.
 Create one Azure identity per blast radius:
 
 ```text
-gh-secdept-sandbox-deploy
-gh-secdept-dev-deploy
-gh-secdept-qa-deploy
-gh-secdept-prod-deploy
+gh-secdept-kv-dev-deploy
+gh-secdept-kv-qa-deploy
 gh-secdept-keys-prod-deploy
+gh-secdept-keys-shared-deploy
 gh-secdept-entra-ca-reportonly
 gh-secdept-entra-ca-prod
 ```
