@@ -1,6 +1,6 @@
 # security-test
 
-This repository is a test structure for security infrastructure automation. It uses one protected `main` branch, short-lived feature branches, and GitHub Environments as the deployment and approval boundary.
+This repository is a mock security infrastructure automation repo. It uses Bicep-only deployments, one protected `main` branch, short-lived feature branches, and GitHub Environments as the deployment and approval boundary.
 
 ## Operating model
 
@@ -9,21 +9,50 @@ Branches represent code maturity:
 - `main`
 - `feature/*`
 - `hotfix/*`
+- `agent/*`
 
-Environments represent deployment targets and approval boundaries:
+Environments represent deployment targets, Azure identities, subscription scope, and approval boundaries:
 
 - `kv-dev`
 - `kv-qa`
 - `keys-prod`
 - `keys-shared`
+- `network-dev`
+- `network-prod`
+- `waf-dev`
+- `waf-prod`
+- `policy-dev`
+- `policy-prod`
 - `entra-report-only`
 - `entra-prod`
 
-The same commit should move through environments with increasing approvals. Do not create long-lived `dev`, `qa`, `prod`, or `keys` branches.
+The same reviewed commit should move through environments with increasing approval. Do not create long-lived `dev`, `qa`, `prod`, `network`, or `keys` branches.
+
+## Repository model
+
+Use one repo for security infrastructure, separated by folders and workflows rather than by resource-type repos.
+
+| Layer | Purpose |
+| --- | --- |
+| Repo | Security infrastructure source of truth |
+| Folder | Control area such as Key Vault, network security, WAF, or policy |
+| Workflow | Deployment lane for a control area |
+| Environment | Azure target, identity, and approval gate |
+| Branch | Short-lived code review flow |
+
+## Deployment lanes
+
+| Lane | Sandbox / lower environment | Production environment | Workflow |
+| --- | --- | --- | --- |
+| Key Vault | `kv-dev`, optional `kv-qa` | `keys-prod`, `keys-shared` | `.github/workflows/deploy-keyvault.yml` |
+| NSG / network security | `network-dev` | `network-prod` | planned |
+| WAF | `waf-dev` | `waf-prod` | planned |
+| Azure Policy | `policy-dev` | `policy-prod` | planned |
+| Conditional Access | `entra-report-only` | `entra-prod` | planned |
 
 The `keys` Azure subscription is intentionally split into two GitHub deployment targets:
 
-- `keys-prod` for production app Key Vaults that promote through `kv-dev` and `kv-qa`
+- `keys-prod` for production app Key Vaults that promote through `kv-dev` and optional `kv-qa`
 - `keys-shared` for departmental, security, or keys-only vaults that do not have dev/qa/prod copies
 
 ## Repository layout
@@ -50,14 +79,14 @@ docs/
 
 ## Pull request validation
 
-PRs run:
+PRs should run:
 
-- Bicep build for templates and parameter files
-- repository policy checks for dangerous infra patterns
-- Conditional Access policy validation
-- PowerShell ScriptAnalyzer
-- secret scanning with Gitleaks
-- dependency review
+- Bicep build for templates
+- parameter file path checks
+- repository policy checks for dangerous infrastructure patterns
+- PowerShell ScriptAnalyzer where available
+- secret scanning
+- dependency review where applicable
 
 ## Deployment
 
@@ -69,16 +98,19 @@ Required GitHub Environment variables:
 - `AZURE_TENANT_ID`
 - `AZURE_SUBSCRIPTION_ID`
 
-The workflow authenticates with Azure using OIDC, runs `what-if`, then deploys only when the operator selects `deploy`.
+The workflow authenticates with Azure using OIDC, runs `what-if`, and deploys with Bicep. Sandbox Key Vault deployment can run automatically after merge to `main`; production deployment is gated by GitHub Environment approval.
 
 Key Vault examples:
 
-- app lifecycle vault: `sample-app` to `kv-dev`, then `kv-qa`, then `keys-prod`
+- app lifecycle vault: `sample-app` to `kv-dev`, optionally `kv-qa`, then `keys-prod`
 - keys-only vault: `department-shared` to `keys-shared`
 
-Conditional Access changes use `.github/workflows/deploy-entra.yml`. Policies default to `reportOnly`; production enablement is separated behind the `entra-prod` environment and requires a change ticket.
+## Documentation
 
-See `docs/diagrams/deployment-flows.md` for the full flow.
+- `docs/diagrams/deployment-flows.md`
+- `docs/diagrams/repo-environment-model.md`
+- `docs/runbooks/github-environments.md`
+- `docs/adr/0001-one-repo-environment-based-deployments.md`
 
 ## Local validation
 

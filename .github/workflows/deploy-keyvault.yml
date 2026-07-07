@@ -1,33 +1,34 @@
 name: Deploy Key Vault
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - "infra/stacks/keyvault/**"
+      - "infra/modules/keyvault/**"
+      - "infra/modules/role-assignment/**"
+      - ".github/workflows/deploy-keyvault.yml"
+
   workflow_dispatch:
     inputs:
-      target:
-        description: GitHub Environment and Key Vault subscription/risk target.
-        required: true
-        type: choice
-        options:
-          - kv-dev
-          - kv-qa
-          - keys-prod
-          - keys-shared
       deployment_class:
-        description: App lifecycle vaults promote dev to qa to keys-prod; keys-only vaults deploy only to keys-shared.
+        description: App lifecycle vaults promote to kv-dev and keys-prod; keys-only vaults deploy to keys-shared.
         required: true
         type: choice
         options:
           - app-lifecycle
           - keys-only
+        default: app-lifecycle
       parameter_set:
         description: Base parameter set name, such as sample-app or department-shared.
         required: true
         type: string
         default: sample-app
       mode:
-        description: Run only what-if, or what-if then deploy.
+        description: Run what-if only, or what-if then deploy.
         required: true
-        default: what-if-only
+        default: deploy
         type: choice
         options:
           - what-if-only
@@ -37,11 +38,28 @@ permissions:
   contents: read
   id-token: write
 
+concurrency:
+  group: keyvault-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && inputs.parameter_set || 'sample-app' }}
+  cancel-in-progress: false
+
+env:
+  STACK_FILE: infra/stacks/keyvault/main.bicep
+  LOCATION: centralus
+  DEPLOYMENT_CLASS: ${{ github.event_name == 'workflow_dispatch' && inputs.deployment_class || 'app-lifecycle' }}
+  PARAMETER_SET: ${{ github.event_name == 'workflow_dispatch' && inputs.parameter_set || 'sample-app' }}
+  MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || 'deploy' }}
+
 jobs:
-  deploy:
-    name: keyvault ${{ inputs.parameter_set }} to ${{ inputs.target }}
+  validate:
+    name: Resolve and validate Key Vault deployment
     runs-on: ubuntu-latest
-    environment: ${{ inputs.target }}
+    outputs:
+      deployment_class: ${{ steps.files.outputs.deployment-class }}
+      parameter_set: ${{ steps.files.outputs.parameter-set }}
+      mode: ${{ steps.files.outputs.mode }}
+      sandbox_parameter_file: ${{ steps.files.outputs.sandbox-parameter-file }}
+      production_parameter_file: ${{ steps.files.outputs.production-parameter-file }}
+      shared_parameter_file: ${{ steps.files.outputs.shared-parameter-file }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -50,32 +68,62 @@ jobs:
         id: files
         shell: pwsh
         run: |
-          $target = "${{ inputs.target }}"
-          $deploymentClass = "${{ inputs.deployment_class }}"
-          $parameterSet = "${{ inputs.parameter_set }}"
+          $deploymentClass = $env:DEPLOYMENT_CLASS
+          $parameterSet = $env:PARAMETER_SET
+          $mode = $env:MODE
+          $stackFile = $env:STACK_FILE
 
-          $appLifecycleTargets = @("kv-dev", "kv-qa", "keys-prod")
-          if ($deploymentClass -eq "app-lifecycle" -and $target -notin $appLifecycleTargets) {
-              throw "App lifecycle vaults can only deploy to: $($appLifecycleTargets -join ', ')."
+          if (!(Test-Path $stackFile)) {
+              throw "Stack file was not found: $stackFile"
           }
 
-          if ($deploymentClass -eq "keys-only" -and $target -ne "keys-shared") {
-              throw "Keys-only vaults can only deploy to keys-shared."
+          "deployment-class=$deploymentClass" >> $env:GITHUB_OUTPUT
+          "parameter-set=$parameterSet" >> $env:GITHUB_OUTPUT
+          "mode=$mode" >> $env:GITHUB_OUTPUT
+
+          if ($deploymentClass -eq "app-lifecycle") {
+              $sandboxParameterFile = "infra/stacks/keyvault/params/app-lifecycle/$parameterSet.kv-dev.bicepparam"
+              $productionParameterFile = "infra/stacks/keyvault/params/app-lifecycle/$parameterSet.keys-prod.bicepparam"
+
+              if (!(Test-Path $sandboxParameterFile)) {
+                  throw "Sandbox parameter file was not found: $sandboxParameterFile"
+              }
+
+              if (!(Test-Path $productionParameterFile)) {
+                  throw "Production parameter file was not found: $productionParameterFile"
+              }
+
+              "sandbox-parameter-file=$sandboxParameterFile" >> $env:GITHUB_OUTPUT
+              "production-parameter-file=$productionParameterFile" >> $env:GITHUB_OUTPUT
+          }
+          elseif ($deploymentClass -eq "keys-only") {
+              $sharedParameterFile = "infra/stacks/keyvault/params/keys-only/$parameterSet.keys-shared.bicepparam"
+
+              if (!(Test-Path $sharedParameterFile)) {
+                  throw "Shared Key Vault parameter file was not found: $sharedParameterFile"
+              }
+
+              "shared-parameter-file=$sharedParameterFile" >> $env:GITHUB_OUTPUT
+          }
+          else {
+              throw "Unsupported deployment class: $deploymentClass"
           }
 
-          $templateFile = "infra/stacks/keyvault/main.bicep"
-          $parameterFile = "infra/stacks/keyvault/params/$deploymentClass/$parameterSet.$target.bicepparam"
+      - name: Install Bicep
+        run: az bicep install
 
-          if (!(Test-Path $templateFile)) {
-              throw "Template file was not found: $templateFile"
-          }
+      - name: Bicep build
+        run: az bicep build --file "$STACK_FILE"
 
-          if (!(Test-Path $parameterFile)) {
-              throw "Parameter file was not found for this stack and target: $parameterFile"
-          }
-
-          "template-file=$templateFile" >> $env:GITHUB_OUTPUT
-          "parameter-file=$parameterFile" >> $env:GITHUB_OUTPUT
+  deploy-kv-dev:
+    name: Deploy app lifecycle vault to kv-dev
+    needs: validate
+    if: ${{ needs.validate.outputs.deployment_class == 'app-lifecycle' }}
+    runs-on: ubuntu-latest
+    environment: kv-dev
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Azure login
         uses: azure/login@v2
@@ -84,20 +132,92 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Bicep build
-        run: az bicep build --file "${{ steps.files.outputs.template-file }}"
+      - name: Install Bicep
+        run: az bicep install
 
-      - name: What-if
+      - name: What-if kv-dev
         run: |
           az deployment sub what-if \
-            --location centralus \
-            --template-file "${{ steps.files.outputs.template-file }}" \
-            --parameters "${{ steps.files.outputs.parameter-file }}"
+            --location "$LOCATION" \
+            --template-file "$STACK_FILE" \
+            --parameters "${{ needs.validate.outputs.sandbox_parameter_file }}"
 
-      - name: Deploy
-        if: ${{ inputs.mode == 'deploy' }}
+      - name: Deploy kv-dev
+        if: ${{ needs.validate.outputs.mode == 'deploy' }}
         run: |
           az deployment sub create \
-            --location centralus \
-            --template-file "${{ steps.files.outputs.template-file }}" \
-            --parameters "${{ steps.files.outputs.parameter-file }}"
+            --location "$LOCATION" \
+            --template-file "$STACK_FILE" \
+            --parameters "${{ needs.validate.outputs.sandbox_parameter_file }}"
+
+  deploy-keys-prod:
+    name: Deploy app lifecycle vault to keys-prod
+    needs:
+      - validate
+      - deploy-kv-dev
+    if: ${{ needs.validate.outputs.deployment_class == 'app-lifecycle' }}
+    runs-on: ubuntu-latest
+    environment: keys-prod
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Install Bicep
+        run: az bicep install
+
+      - name: What-if keys-prod
+        run: |
+          az deployment sub what-if \
+            --location "$LOCATION" \
+            --template-file "$STACK_FILE" \
+            --parameters "${{ needs.validate.outputs.production_parameter_file }}"
+
+      - name: Deploy keys-prod
+        if: ${{ needs.validate.outputs.mode == 'deploy' }}
+        run: |
+          az deployment sub create \
+            --location "$LOCATION" \
+            --template-file "$STACK_FILE" \
+            --parameters "${{ needs.validate.outputs.production_parameter_file }}"
+
+  deploy-keys-shared:
+    name: Deploy keys-only vault to keys-shared
+    needs: validate
+    if: ${{ needs.validate.outputs.deployment_class == 'keys-only' }}
+    runs-on: ubuntu-latest
+    environment: keys-shared
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Install Bicep
+        run: az bicep install
+
+      - name: What-if keys-shared
+        run: |
+          az deployment sub what-if \
+            --location "$LOCATION" \
+            --template-file "$STACK_FILE" \
+            --parameters "${{ needs.validate.outputs.shared_parameter_file }}"
+
+      - name: Deploy keys-shared
+        if: ${{ needs.validate.outputs.mode == 'deploy' }}
+        run: |
+          az deployment sub create \
+            --location "$LOCATION" \
+            --template-file "$STACK_FILE" \
+            --parameters "${{ needs.validate.outputs.shared_parameter_file }}"

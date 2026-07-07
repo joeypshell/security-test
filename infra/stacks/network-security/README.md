@@ -1,5 +1,17 @@
-# Network Security Stack Lane
+# Network Security Stack
 
-This folder is reserved for NSG and WAF rule deployments.
+Placeholder for NSG and related network security deployment stacks.
 
-NSG and WAF changes should use a separate deployment lane from Key Vault because their blast radius and validation requirements are different. Expected checks include rule collision detection, deny/allow review, and environment-specific approval.
+## Intended model
+
+- Lower target: `network-dev`
+- Production target: `network-prod`
+- Deployment method: Bicep
+- Workflow: planned `.github/workflows/deploy-network-security.yml`
+
+## Guardrails to add before deployment
+
+- Reject broad inbound rules unless an exception is documented.
+- Require named rule owners and expiration where appropriate.
+- Prefer application or subnet-scoped rules over broad subscription-wide changes.
+- Run production `what-if` before approval.

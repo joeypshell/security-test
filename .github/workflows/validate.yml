@@ -1,0 +1,92 @@
+name: Validate Security Infrastructure
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  validate-bicep:
+    name: Bicep validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Bicep
+        run: az bicep install
+
+      - name: Build Bicep templates
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t files < <(find infra -name '*.bicep' -type f | sort)
+
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "No Bicep files found."
+            exit 0
+          fi
+
+          for file in "${files[@]}"; do
+            echo "Building $file"
+            az bicep build --file "$file"
+          done
+
+  validate-powershell:
+    name: PowerShell validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run ScriptAnalyzer when available
+        shell: pwsh
+        run: |
+          $scripts = Get-ChildItem -Path scripts -Filter *.ps1 -Recurse -ErrorAction SilentlyContinue
+          if (!$scripts) {
+              Write-Host "No PowerShell scripts found."
+              return
+          }
+
+          if (!(Get-Command Invoke-ScriptAnalyzer -ErrorAction SilentlyContinue)) {
+              Write-Host "PSScriptAnalyzer is not installed on this runner; skipping static analysis."
+              return
+          }
+
+          $results = Invoke-ScriptAnalyzer -Path scripts -Recurse -Severity Error, Warning
+          $results | Format-Table -AutoSize
+
+          if ($results) {
+              throw "PSScriptAnalyzer found issues."
+          }
+
+  validate-repository-shape:
+    name: Repository shape validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check expected directories
+        shell: pwsh
+        run: |
+          $requiredDirectories = @(
+              ".github/workflows",
+              "infra/modules",
+              "infra/stacks",
+              "docs/diagrams",
+              "docs/adr",
+              "docs/runbooks"
+          )
+
+          foreach ($directory in $requiredDirectories) {
+              if (!(Test-Path $directory)) {
+                  throw "Required directory is missing: $directory"
+              }
+          }

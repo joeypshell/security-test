@@ -1,6 +1,11 @@
 * @joeypshell
 
 /.github/workflows/ @joeypshell
-/infra/ @joeypshell
+/infra/modules/ @joeypshell
+/infra/stacks/keyvault/ @joeypshell
+/infra/stacks/network-security/ @joeypshell
+/infra/stacks/waf/ @joeypshell
+/infra/stacks/azure-policy/ @joeypshell
 /identity/ @joeypshell
 /scripts/ @joeypshell
+/docs/ @joeypshell
