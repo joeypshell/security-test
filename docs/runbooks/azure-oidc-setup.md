@@ -21,3 +21,12 @@ For each identity:
 4. Store the client ID, tenant ID, and subscription ID as GitHub Environment variables.
 
 Do not reuse one highly privileged identity across all environments.
+
+## Conditional Access Graph permissions
+
+The `entra-report-only` and `entra-prod` identities deploy tenant-scoped Conditional Access policies through Microsoft Graph, not Azure Resource Manager. Grant only these Microsoft Graph application permissions and admin consent:
+
+- `Policy.Read.All`
+- `Policy.ReadWrite.ConditionalAccess`
+
+Do not grant these Graph permissions to the Key Vault deployment identities.

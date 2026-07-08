@@ -1,0 +1,54 @@
+name: Deploy Conditional Access policies
+description: Validate, plan, and optionally apply Conditional Access policies through Microsoft Graph.
+
+inputs:
+  policy-path:
+    description: Path containing Conditional Access policy JSON files.
+    required: false
+    default: identity/conditional-access/policies
+  target-state:
+    description: Conditional Access state to enforce.
+    required: true
+  mode:
+    description: Deployment mode.
+    required: true
+  change-ticket:
+    description: Change ticket for production enablement.
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Validate policies
+      shell: pwsh
+      env:
+        POLICY_PATH: ${{ inputs.policy-path }}
+      run: ./identity/conditional-access/tests/Test-ConditionalAccessPolicy.ps1 -PolicyPath $env:POLICY_PATH
+
+    - name: Plan policy deployment
+      shell: pwsh
+      env:
+        POLICY_PATH: ${{ inputs.policy-path }}
+        TARGET_STATE: ${{ inputs.target-state }}
+        CHANGE_TICKET: ${{ inputs.change-ticket }}
+      run: |
+        ./scripts/operational/Invoke-ConditionalAccessDeployment.ps1 `
+          -PolicyPath $env:POLICY_PATH `
+          -TargetState $env:TARGET_STATE `
+          -ChangeTicket $env:CHANGE_TICKET `
+          -WhatIf
+
+    - name: Apply policy deployment
+      if: ${{ inputs.mode == 'apply' }}
+      shell: pwsh
+      env:
+        POLICY_PATH: ${{ inputs.policy-path }}
+        TARGET_STATE: ${{ inputs.target-state }}
+        CHANGE_TICKET: ${{ inputs.change-ticket }}
+      run: |
+        ./scripts/operational/Invoke-ConditionalAccessDeployment.ps1 `
+          -PolicyPath $env:POLICY_PATH `
+          -TargetState $env:TARGET_STATE `
+          -ChangeTicket $env:CHANGE_TICKET `
+          -Apply
