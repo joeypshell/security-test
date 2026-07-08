@@ -13,3 +13,10 @@ Required controls:
 - current tenant state is exported before apply
 
 Use `entra-report-only` first, observe sign-in impact, then promote through `entra-prod` after approval.
+
+## Included test policies
+
+- `CA001 - Require MFA for admin roles`
+- `CA002 - Block legacy authentication`
+
+Deploy them with `.github/workflows/deploy-entra.yml`. The workflow calls the local `.github/actions/deploy-conditional-access` action, which validates the JSON files, plans the change, and applies through Microsoft Graph only when `mode=apply`.

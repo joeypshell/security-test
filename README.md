@@ -76,7 +76,7 @@ Key Vault examples:
 - app lifecycle vault: `sample-app` to `kv-dev`, then `kv-qa`, then `keys-prod`
 - keys-only vault: `department-shared` to `keys-shared`
 
-Conditional Access changes use `.github/workflows/deploy-entra.yml`. Policies default to `reportOnly`; production enablement is separated behind the `entra-prod` environment and requires a change ticket.
+Conditional Access changes use `.github/workflows/deploy-entra.yml` and the local `.github/actions/deploy-conditional-access` action. Policies default to `reportOnly`; production enablement is separated behind the `entra-prod` environment and requires a change ticket. The initial test set contains `CA001 - Require MFA for admin roles` and `CA002 - Block legacy authentication`.
 
 See `docs/diagrams/deployment-flows.md` for the full flow.
 

@@ -36,66 +36,48 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Validate policies
-        shell: pwsh
-        run: ./identity/conditional-access/tests/Test-ConditionalAccessPolicy.ps1
-
       - name: Require change ticket for production enablement
         if: ${{ inputs.target == 'entra-prod' && inputs.change_ticket == '' }}
         run: |
           echo "entra-prod requires a change ticket."
           exit 1
 
-      - name: Export current tenant state
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          allow-no-subscriptions: true
+
+      - name: Resolve target state
+        id: target
         shell: pwsh
         run: |
-          ./scripts/reporting/Export-TenantState.ps1 `
-            -OutputPath tenant-state-export.json `
-            -WhatIf
+          if ('${{ inputs.target }}' -eq 'entra-prod') {
+            'state=enabled' >> $env:GITHUB_OUTPUT
+          }
+          else {
+            'state=reportOnly' >> $env:GITHUB_OUTPUT
+          }
 
-      - name: Upload tenant export plan
+      - name: Export current Conditional Access state
+        if: ${{ inputs.mode == 'apply' }}
+        shell: pwsh
+        run: ./scripts/reporting/Export-TenantState.ps1 -OutputPath tenant-state-export.json
+
+      - name: Upload tenant export
+        if: ${{ inputs.mode == 'apply' }}
         uses: actions/upload-artifact@v4
         with:
-          name: tenant-state-export-plan
+          name: tenant-state-export-${{ inputs.target }}
           path: tenant-state-export.json
           if-no-files-found: ignore
 
-      - name: Plan report-only deployment
-        if: ${{ inputs.target == 'entra-report-only' }}
-        shell: pwsh
-        run: |
-          ./scripts/operational/Invoke-ConditionalAccessDeployment.ps1 `
-            -PolicyPath identity/conditional-access/policies `
-            -TargetState reportOnly `
-            -ChangeTicket "${{ inputs.change_ticket }}" `
-            -WhatIf
-
-      - name: Apply report-only deployment
-        if: ${{ inputs.target == 'entra-report-only' && inputs.mode == 'apply' }}
-        shell: pwsh
-        run: |
-          ./scripts/operational/Invoke-ConditionalAccessDeployment.ps1 `
-            -PolicyPath identity/conditional-access/policies `
-            -TargetState reportOnly `
-            -ChangeTicket "${{ inputs.change_ticket }}" `
-            -Apply
-
-      - name: Plan production enablement
-        if: ${{ inputs.target == 'entra-prod' }}
-        shell: pwsh
-        run: |
-          ./scripts/operational/Invoke-ConditionalAccessDeployment.ps1 `
-            -PolicyPath identity/conditional-access/policies `
-            -TargetState enabled `
-            -ChangeTicket "${{ inputs.change_ticket }}" `
-            -WhatIf
-
-      - name: Apply production enablement
-        if: ${{ inputs.target == 'entra-prod' && inputs.mode == 'apply' }}
-        shell: pwsh
-        run: |
-          ./scripts/operational/Invoke-ConditionalAccessDeployment.ps1 `
-            -PolicyPath identity/conditional-access/policies `
-            -TargetState enabled `
-            -ChangeTicket "${{ inputs.change_ticket }}" `
-            -Apply
+      - name: Deploy Conditional Access policies
+        uses: ./.github/actions/deploy-conditional-access
+        with:
+          policy-path: identity/conditional-access/policies
+          target-state: ${{ steps.target.outputs.state }}
+          mode: ${{ inputs.mode }}
+          change-ticket: ${{ inputs.change_ticket }}
