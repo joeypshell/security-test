@@ -32,6 +32,8 @@ Replace the placeholder user object IDs in `identity/conditional-access/required
 
 The workflow forces the deployment state from the selected environment. `entra-report-only` applies these definitions as `reportOnly`; `entra-prod` applies them as `enabled`.
 
+Microsoft Graph stores report-only policies as `enabledForReportingButNotEnforced`. The deployment script translates the repo target `reportOnly` to that Graph state during apply.
+
 ## Deployment behavior
 
 The workflow logs in with GitHub OIDC, obtains a Microsoft Graph token, and upserts each policy by `displayName` through `/identity/conditionalAccess/policies`.

@@ -31,6 +31,11 @@ if ($TargetState -eq 'enabled' -and [string]::IsNullOrWhiteSpace($ChangeTicket))
     throw 'Production enablement requires a change ticket.'
 }
 
+$graphState = switch ($TargetState) {
+    'reportOnly' { 'enabledForReportingButNotEnforced' }
+    'enabled' { 'enabled' }
+}
+
 $normalizedGraphBaseUri = $GraphBaseUri.TrimEnd('/')
 $resolvedPolicyPath = Resolve-Path -LiteralPath $PolicyPath
 $policyFiles = Get-ChildItem -LiteralPath $resolvedPolicyPath -Filter '*.json' -File
@@ -58,10 +63,10 @@ foreach ($file in $policyFiles) {
 
     $stateProperty = $policy.PSObject.Properties['state']
     if ($stateProperty) {
-        $stateProperty.Value = $TargetState
+        $stateProperty.Value = $graphState
     }
     else {
-        $policy | Add-Member -NotePropertyName state -NotePropertyValue $TargetState
+        $policy | Add-Member -NotePropertyName state -NotePropertyValue $graphState
     }
 
     foreach ($readOnlyPropertyName in '@odata.context', 'id', 'createdDateTime', 'modifiedDateTime') {
