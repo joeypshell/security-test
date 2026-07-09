@@ -1,6 +1,8 @@
 name: Deploy Conditional Access policies
 description: Validate, plan, and optionally apply Conditional Access policies through Microsoft Graph.
 
+# Inputs are passed through environment variables before entering PowerShell.
+# This avoids mixing GitHub expression syntax directly into script arguments.
 inputs:
   policy-path:
     description: Path containing Conditional Access policy JSON files.
@@ -20,12 +22,16 @@ inputs:
 runs:
   using: composite
   steps:
+    # Validation is always first so neither plan nor apply can process malformed
+    # policies or policies missing required emergency-access exclusions.
     - name: Validate policies
       shell: pwsh
       env:
         POLICY_PATH: ${{ inputs.policy-path }}
       run: ./identity/conditional-access/tests/Test-ConditionalAccessPolicy.ps1 -PolicyPath $env:POLICY_PATH
 
+    # A plan always runs, including during apply jobs. The deployment script's
+    # WhatIf path returns before requesting a Graph token or making Graph calls.
     - name: Plan policy deployment
       shell: pwsh
       env:
@@ -39,6 +45,8 @@ runs:
           -ChangeTicket $env:CHANGE_TICKET `
           -WhatIf
 
+    # Only an explicit apply mode reaches the Graph write path. Target state was
+    # already selected by the parent workflow's protected environment mapping.
     - name: Apply policy deployment
       if: ${{ inputs.mode == 'apply' }}
       shell: pwsh

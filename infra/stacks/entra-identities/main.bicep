@@ -1,5 +1,7 @@
 targetScope = 'subscription'
 
+// The stack is subscription-scoped only because user-assigned identities are
+// Azure resources. Normal Conditional Access deployments remain tenant-scoped.
 @description('Azure region used for the resource group and managed identities.')
 param location string
 
@@ -29,6 +31,8 @@ resource resourceGroup 'Microsoft.Resources/resourceGroups@2024-03-01' = {
   })
 }
 
+// Report-only and production receive separate identities and federated subjects
+// so GitHub approvals and identity audit trails remain independently scoped.
 module reportOnlyIdentity '../../modules/github-federated-managed-identity/main.bicep' = {
   name: 'entra-report-only-identity'
   scope: resourceGroup
@@ -59,6 +63,8 @@ module productionIdentity '../../modules/github-federated-managed-identity/main.
   }
 }
 
+// These structured outputs contain every value needed by the permission script
+// and GitHub Environment configuration without exposing any credential material.
 output reportOnlyIdentity object = {
   name: reportOnlyIdentity.outputs.managedIdentityName
   clientId: reportOnlyIdentity.outputs.clientId

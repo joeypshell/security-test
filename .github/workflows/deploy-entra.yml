@@ -1,8 +1,12 @@
 name: Deploy Entra Conditional Access
 
+# This workflow is manually dispatched because Conditional Access changes require
+# an explicit target, deployment mode, and production change-control decision.
 on:
   workflow_dispatch:
     inputs:
+      # The target selects both the GitHub Environment protection rules and the
+      # managed identity client ID stored in that environment's variables.
       target:
         description: Approval boundary for the change.
         required: true
@@ -14,6 +18,8 @@ on:
         description: Required for entra-prod.
         required: false
         type: string
+      # Plan performs validation and prints intended changes. Apply also exports
+      # current tenant state and writes the requested policies through Graph.
       mode:
         description: Plan only, or apply the requested state.
         required: true
@@ -24,6 +30,8 @@ on:
           - apply
 
 permissions:
+  # Checkout needs read access. OIDC federation requires GitHub to mint a
+  # short-lived ID token for this job; no repository write permission is needed.
   contents: read
   id-token: write
 
@@ -31,17 +39,23 @@ jobs:
   conditional-access:
     name: Conditional Access ${{ inputs.target }}
     runs-on: ubuntu-latest
+    # Environment selection gates the job and exposes only that environment's
+    # AZURE_CLIENT_ID and AZURE_TENANT_ID values.
     environment: ${{ inputs.target }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Fail before authentication when production change control is incomplete.
       - name: Require change ticket for production enablement
         if: ${{ inputs.target == 'entra-prod' && inputs.change_ticket == '' }}
         run: |
           echo "entra-prod requires a change ticket."
           exit 1
 
+      # azure/login exchanges GitHub's OIDC token for the user-assigned managed
+      # identity selected by AZURE_CLIENT_ID. Conditional Access is tenant-scoped,
+      # so the CLI session intentionally has no default Azure subscription.
       - name: Azure login with federated managed identity
         uses: azure/login@v2
         with:
@@ -49,6 +63,8 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           allow-no-subscriptions: true
 
+      # Policy files remain reportOnly in source control. The protected GitHub
+      # Environment, not editable policy JSON, decides the deployed state.
       - name: Resolve target state
         id: target
         shell: pwsh
@@ -60,6 +76,8 @@ jobs:
             'state=reportOnly' >> $env:GITHUB_OUTPUT
           }
 
+      # Apply runs capture current tenant state before any policy write. The
+      # following upload preserves that snapshot as a workflow artifact.
       - name: Export current Conditional Access state
         if: ${{ inputs.mode == 'apply' }}
         shell: pwsh
@@ -73,6 +91,8 @@ jobs:
           path: tenant-state-export.json
           if-no-files-found: ignore
 
+      # The local composite action centralizes validation, plan, and apply logic
+      # so every environment follows the same deployment implementation.
       - name: Deploy Conditional Access policies
         uses: ./.github/actions/deploy-conditional-access
         with:

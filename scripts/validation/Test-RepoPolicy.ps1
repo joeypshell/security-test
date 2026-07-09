@@ -52,6 +52,8 @@ foreach ($file in $textFiles) {
         }
     }
 
+    # Source-controlled Conditional Access definitions must remain report-only.
+    # The protected deployment environment is the only normal state promotion path.
     if (!$AllowEnabledConditionalAccess -and $relativePath -match 'identity[\\/]conditional-access[\\/]policies' -and $content -match '"state"\s*:\s*"enabled"') {
         Add-Failure "$relativePath enables a Conditional Access policy directly. Use reportOnly first."
     }

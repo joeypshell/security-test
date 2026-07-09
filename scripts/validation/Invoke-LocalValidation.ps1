@@ -12,6 +12,8 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot '..\..')
 Push-Location $repoRoot
 try {
+    # Match the custom policy gates used by pull-request validation before
+    # running optional local analyzers and Bicep compilation.
     ./scripts/validation/Test-RepoPolicy.ps1
     ./identity/conditional-access/tests/Test-ConditionalAccessPolicy.ps1
 

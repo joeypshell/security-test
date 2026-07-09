@@ -23,6 +23,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# Fail with a setup-specific message before attempting the privileged login.
 $requiredCommands = @(
     'Connect-Entra',
     'Get-EntraServicePrincipal',
@@ -36,10 +37,14 @@ foreach ($commandName in $requiredCommands) {
     }
 }
 
+# Permission assignment is an administrative bootstrap operation. These scopes
+# authorize the signed-in administrator to discover applications and grant roles.
 Connect-Entra `
     -TenantId $TenantId `
     -Scopes 'Application.ReadWrite.All', 'AppRoleAssignment.ReadWrite.All' | Out-Null
 
+# Microsoft Graph has a fixed application ID in every Entra tenant. App-role IDs
+# are discovered from its service principal instead of being hard-coded here.
 $graphServicePrincipals = @(
     Get-EntraServicePrincipal -Filter "appId eq '00000003-0000-0000-c000-000000000000'"
 )
@@ -50,6 +55,9 @@ if ($graphServicePrincipals.Count -ne 1) {
 
 $graphServicePrincipal = $graphServicePrincipals[0]
 
+# A user-assigned managed identity is represented in Entra by a service principal.
+# Resolve each identity by client ID so duplicate display names cannot select the
+# wrong principal.
 foreach ($clientId in $ManagedIdentityClientId) {
     $managedIdentityServicePrincipals = @(
         Get-EntraServicePrincipal -Filter "appId eq '$($clientId.Guid)' and servicePrincipalType eq 'ManagedIdentity'"
@@ -64,6 +72,8 @@ foreach ($clientId in $ManagedIdentityClientId) {
         Get-EntraServicePrincipalAppRoleAssignment -ServicePrincipalId $managedIdentityServicePrincipal.Id
     )
 
+    # Resolve each requested application permission to the app-role GUID exposed
+    # by Microsoft Graph. Only roles assignable to applications are accepted.
     foreach ($permissionName in $Permission) {
         $appRoles = @(
             $graphServicePrincipal.AppRoles | Where-Object {
@@ -76,6 +86,9 @@ foreach ($clientId in $ManagedIdentityClientId) {
         }
 
         $appRole = $appRoles[0]
+
+        # Treat an existing assignment as success. This makes repeated bootstrap
+        # runs idempotent and avoids duplicate app-role assignment requests.
         $existingAssignment = $currentAssignments | Where-Object {
             $_.ResourceId -eq $graphServicePrincipal.Id -and $_.AppRoleId -eq $appRole.Id
         }
@@ -85,6 +98,7 @@ foreach ($clientId in $ManagedIdentityClientId) {
             continue
         }
 
+        # SupportsShouldProcess enables -WhatIf inspection before changing Entra.
         $target = "$($managedIdentityServicePrincipal.DisplayName) ($clientId)"
         if ($PSCmdlet.ShouldProcess($target, "Grant Microsoft Graph application permission $permissionName")) {
             $assignmentParameters = @{

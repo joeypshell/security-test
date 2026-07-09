@@ -43,6 +43,7 @@ scripts/
   migration/          Migration helpers
   reporting/          Export and reporting helpers
 docs/
+  architecture/       Detailed system design and trust-boundary documentation
   diagrams/           Mermaid diagrams for deployment flow and target mapping
   adr/                Architecture decisions
   runbooks/           Setup and operating runbooks
@@ -78,7 +79,7 @@ Key Vault examples:
 
 Conditional Access changes use `.github/workflows/deploy-entra.yml` and the local `.github/actions/deploy-conditional-access` action. Each Entra environment authenticates through GitHub OIDC as its own user-assigned managed identity. Entra deployment requires `AZURE_CLIENT_ID` and `AZURE_TENANT_ID`, but not `AZURE_SUBSCRIPTION_ID`. Policies default to `reportOnly`; production enablement is separated behind the `entra-prod` environment and requires a change ticket. The initial test set contains `CA001 - Require MFA for admin roles` and `CA002 - Block legacy authentication`.
 
-See `docs/diagrams/deployment-flows.md` for the full flow.
+See `docs/architecture/entra-managed-identity-conditional-access.md` for the full authentication and deployment design. The supporting Mermaid diagrams are in `docs/diagrams/entra-managed-identity-conditional-access.md`.
 
 ## Local validation
 
