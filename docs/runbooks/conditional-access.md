@@ -36,12 +36,13 @@ Microsoft Graph stores report-only policies as `enabledForReportingButNotEnforce
 
 ## Deployment behavior
 
-The workflow logs in with GitHub OIDC, obtains a Microsoft Graph token, and upserts each policy by `displayName` through `/identity/conditionalAccess/policies`.
+The workflow logs in through GitHub OIDC as the user-assigned managed identity assigned to the selected GitHub Environment, obtains a Microsoft Graph token, and upserts each policy by `displayName` through `/identity/conditionalAccess/policies`.
 
 Required GitHub Environment variables:
 
 - `AZURE_CLIENT_ID`
 - `AZURE_TENANT_ID`
-- `AZURE_SUBSCRIPTION_ID`
 
-The Entra deployment identity needs Microsoft Graph application permissions `Policy.Read.All` and `Policy.ReadWrite.ConditionalAccess` with admin consent.
+`AZURE_CLIENT_ID` must be the client ID of the environment's user-assigned managed identity. Do not configure `AZURE_SUBSCRIPTION_ID`; Conditional Access deployment is tenant-scoped.
+
+The managed identity needs Microsoft Graph application permissions `Policy.Read.All` and `Policy.ReadWrite.ConditionalAccess`.

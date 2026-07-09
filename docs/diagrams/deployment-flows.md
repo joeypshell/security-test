@@ -45,7 +45,8 @@ flowchart TD
     I1 --> I2["Approval"]
     I2 --> I3["Deploy NSG / WAF rules"]
 
-    J --> J1["Validate Conditional Access JSON"]
+    J --> J0["GitHub OIDC to environment managed identity"]
+    J0 --> J1["Validate Conditional Access JSON"]
     J1 --> J2["Deploy report-only"]
     J2 --> J3["Observe impact"]
     J3 --> J4["Approve enablement"]
