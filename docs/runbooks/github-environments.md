@@ -11,11 +11,18 @@ Create these environments:
 | entra-report-only | Conditional Access report-only staging | IAM or security approval |
 | entra-prod | Conditional Access enablement | IAM, security, and change approval |
 
-Each Azure deployment environment should define:
+Each subscription-scoped Key Vault deployment environment should define:
 
 - `AZURE_CLIENT_ID`
 - `AZURE_TENANT_ID`
 - `AZURE_SUBSCRIPTION_ID`
+
+Each Entra environment should define:
+
+- `AZURE_CLIENT_ID`: client ID of that environment's user-assigned managed identity
+- `AZURE_TENANT_ID`
+
+Do not define `AZURE_SUBSCRIPTION_ID` for `entra-report-only` or `entra-prod`.
 
 Use GitHub environment protection rules for reviewers, wait timers, and branch restrictions. Restrict deployments to `main` once the repository is ready for production use.
 

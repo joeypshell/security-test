@@ -25,6 +25,6 @@ Infrastructure code should promote the same reviewed commit through increasingly
 - `main` is the source of deployable truth.
 - Environment approvals gate deployments.
 - Parameter files hold target-specific configuration.
-- Azure OIDC identities are scoped per target.
+- Azure OIDC identities are scoped per target. Entra targets use separate user-assigned managed identities with environment-scoped GitHub federated credentials.
 - The `keys` subscription is split into `keys-prod` and `keys-shared` approval paths without creating separate branches.
 - `keys-prod`, `keys-shared`, and `entra-prod` can have stricter approvals without creating separate branches.
