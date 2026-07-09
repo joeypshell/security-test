@@ -5,6 +5,8 @@ function ConvertTo-PlainText {
         [securestring] $SecureValue
     )
 
+    # Marshal only long enough to supply the bearer token to the HTTP client,
+    # then zero the unmanaged buffer even when conversion throws.
     $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($SecureValue)
     try {
         [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr)
@@ -20,14 +22,20 @@ function Get-GraphAccessToken {
         [securestring] $ProvidedAccessToken
     )
 
+    # Explicit input is highest priority so tests and controlled local runs can
+    # avoid depending on ambient Azure CLI or Az PowerShell state.
     if ($ProvidedAccessToken) {
         return ConvertTo-PlainText -SecureValue $ProvidedAccessToken
     }
 
+    # Environment token support is useful for non-interactive tooling, but the
+    # GitHub workflow normally uses the Azure CLI path below.
     if (![string]::IsNullOrWhiteSpace($env:GRAPH_ACCESS_TOKEN)) {
         return $env:GRAPH_ACCESS_TOKEN
     }
 
+    # azure/login configures this CLI session through GitHub OIDC. Requesting the
+    # Graph resource converts that session into a short-lived Graph bearer token.
     $azCommand = Get-Command az -ErrorAction SilentlyContinue
     if ($azCommand) {
         $token = & $azCommand.Source account get-access-token `
@@ -40,6 +48,7 @@ function Get-GraphAccessToken {
         }
     }
 
+    # Az PowerShell is a local-administration fallback when Azure CLI is absent.
     $getAzAccessTokenCommand = Get-Command Get-AzAccessToken -ErrorAction SilentlyContinue
     if ($getAzAccessTokenCommand) {
         try {
@@ -76,6 +85,8 @@ function Invoke-GraphRequest {
         [string] $Body
     )
 
+    # Every Graph request uses the same bearer-token and terminating-error policy.
+    # Invoke-RestMethod then returns deserialized JSON to the calling script.
     $parameters = @{
         Method = $Method
         Uri = $Uri
@@ -85,6 +96,7 @@ function Invoke-GraphRequest {
         ErrorAction = 'Stop'
     }
 
+    # GET requests omit the body; POST and PATCH payloads are JSON policy objects.
     if (![string]::IsNullOrWhiteSpace($Body)) {
         $parameters.ContentType = 'application/json'
         $parameters.Body = $Body
@@ -103,6 +115,8 @@ function Get-GraphCollection {
         [string] $AccessToken
     )
 
+    # Graph collections may span multiple pages. Follow @odata.nextLink until the
+    # service stops returning one so callers always receive the complete set.
     $items = @()
     $nextUri = $Uri
 

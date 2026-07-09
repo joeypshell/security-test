@@ -2,6 +2,8 @@
 
 Conditional Access policy changes use a report-only first model.
 
+Read `docs/architecture/entra-managed-identity-conditional-access.md` for the complete authentication and deployment behavior. Diagrams are available in `docs/diagrams/entra-managed-identity-conditional-access.md`.
+
 ## Flow
 
 1. Update JSON policy files in `identity/conditional-access/policies/`.

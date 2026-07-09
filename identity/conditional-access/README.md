@@ -20,3 +20,5 @@ Use `entra-report-only` first, observe sign-in impact, then promote through `ent
 - `CA002 - Block legacy authentication`
 
 Deploy them with `.github/workflows/deploy-entra.yml`. The workflow calls the local `.github/actions/deploy-conditional-access` action, which validates the JSON files, plans the change, and applies through Microsoft Graph only when `mode=apply`.
+
+For the complete managed identity, OIDC, Graph token, and upsert design, see `docs/architecture/entra-managed-identity-conditional-access.md`. The sequence and trust-boundary diagrams are in `docs/diagrams/entra-managed-identity-conditional-access.md`.

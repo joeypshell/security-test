@@ -2,6 +2,8 @@
 
 Use GitHub OIDC instead of stored Azure client secrets. Entra Conditional Access deployments authenticate as user-assigned managed identities; they do not use app registrations or client secrets.
 
+Read `docs/architecture/entra-managed-identity-conditional-access.md` for the complete trust and token-exchange model. Diagrams are available in `docs/diagrams/entra-managed-identity-conditional-access.md`.
+
 Create one Azure identity per blast radius:
 
 ```text
